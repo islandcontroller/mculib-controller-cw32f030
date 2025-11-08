@@ -35,10 +35,10 @@ volatile uint32_t SystemCoreClock;
  ******************************************************************************/
 void SystemInit(void)
 {
-#if __VTOR_PRESENT
+#if ((__VTOR_PRESENT == 1) && (VECT_TAB_OFFSET != 0uL))
   // Configure IVT relocation
   SCB->VTOR = VECT_TAB_OFFSET & ~0xFFuL;
-#endif // __VTOR_PRESENT
+#endif
 
   // Load HSI calibration value and configure HSI divider
   // for 8 MHz output
@@ -66,7 +66,7 @@ void SystemInit(void)
                     (0uL << SYSCTRL_CR0_HCLKPRS_Pos)   | // HCLK = SYSCLK
                     (0uL << SYSCTRL_CR0_PCLKPRS_Pos);    // PCLK = HCLK
 
-  // Reset to default core clock frequency
+  // Reset to default core clock frequency (8 MHz)
   SystemCoreClock = HSI_VALUE / 6uL;
 }
 
