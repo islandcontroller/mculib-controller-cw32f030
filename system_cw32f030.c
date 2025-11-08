@@ -40,17 +40,31 @@ void SystemInit(void)
   SCB->VTOR = VECT_TAB_OFFSET & ~0xFFuL;
 #endif // __VTOR_PRESENT
 
-  // Load HSI calibration value and enable it
-  uint32_t ulHsiTrim = (uint32_t)*((volatile const uint16_t*)RCC_HSI_TRIMCODEADDR);
-  CW_SYSCTRL->HSI = RCC_HSIOSC_DIV6 | (ulHsiTrim & 0x3FFuL);
-  CW_SYSCTRL->CR1 = (CW_SYSCTRL->CR1 & ~SYSCTRL_BYPASS_MASK) | SYSCTRL_BYPASS | RCC_SYSCTRL_HSIEN;
+  // Load HSI calibration value and configure HSI divider
+  // for 8 MHz output
+  uint32_t ulTrim = (uint32_t)*((volatile const uint16_t*)0x12600uL) & SYSCTRL_HSI_TRIM_Msk;
+  CW_SYSCTRL->HSI = (0x5uL << SYSCTRL_HSI_DIV_Pos)     | // DIV = 6 (default)
+                    (ulTrim << SYSCTRL_HSI_TRIM_Pos);    // Factory trim
 
-  // Switch SYSCLK to HSI/1
-  CW_SYSCTRL->CR0 = SYSCTRL_BYPASS | RCC_SYSCLKSRC_HSI | RCC_HCLK_DIV1;
+  // Enable HSI
+  CW_SYSCTRL->CR1 = (0x5A5AuL << SYSCTRL_CR1_KEY_Pos)  | // Unlock
+                    (1uL << SYSCTRL_CR1_HSIEN_Pos);      // HSI Enable
 
-  // Disable MCO and other oscillators
-  CW_SYSCTRL->CR1 = SYSCTRL_BYPASS | SYSCTRL_CR1_HSIEN_Msk;
-  CW_SYSCTRL->MCO = RCC_MCO_SRC_NONE;
+  // Configure FLASH wait states, prefetch and cache
+  __RCC_FLASH_CLK_ENABLE();
+  CW_FLASH->CR2   = (0x5A5AuL << FLASH_CR2_KEY_Pos)    | // Unlock
+                    (0uL << FLASH_CR2_CACHE_Pos)       | // Disable cache
+                    (0uL << FLASH_CR2_FETCH_Pos)       | // Disable prefetch
+                    (0uL << FLASH_CR2_WAIT_Pos);         // 1 wait state
+
+  // Wait for HSI to stabilise
+  while ((CW_SYSCTRL->HSI & SYSCTRL_HSI_STABLE_Msk) == 0uL);
+
+  // Set SYSCLK to HSI and configure dividers
+  CW_SYSCTRL->CR0 = (0x5A5AuL << SYSCTRL_CR0_KEY_Pos)  | // Unlock
+                    (0uL << SYSCTRL_CR0_SYSCLK_Pos)    | // SYSCLK from HSI
+                    (0uL << SYSCTRL_CR0_HCLKPRS_Pos)   | // HCLK = SYSCLK
+                    (0uL << SYSCTRL_CR0_PCLKPRS_Pos);    // PCLK = HCLK
 
   // Reset to default core clock frequency
   SystemCoreClock = HSI_VALUE / 6uL;
